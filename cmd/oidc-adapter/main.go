@@ -85,6 +85,34 @@ func main() {
 		c.Redirect(http.StatusTemporaryRedirect, redirectTo.String())
 	})
 
+	r.GET("/oidc-adapter/consent", func(c *gin.Context) {
+		challenge := c.Query("consent_challenge")
+
+		reqBody, _, err := hydraClient.AdminApi.GetConsentRequest(c).ConsentChallenge(challenge).Execute()
+		if err != nil {
+			c.AbortWithError(http.StatusInternalServerError, err)
+			return
+		}
+
+		remember := true
+		rememberFor := int64(600)
+		acceptReq := hydra.AcceptConsentRequest{
+			GrantAccessTokenAudience: reqBody.RequestedAccessTokenAudience,
+			GrantScope:               reqBody.RequestedScope,
+			Remember:                 &remember,
+			RememberFor:              &rememberFor,
+			Session:                  nil,
+		}
+		acceptBody, _, err := hydraClient.AdminApi.AcceptConsentRequest(c).
+			ConsentChallenge(challenge).
+			AcceptConsentRequest(acceptReq).
+			Execute()
+		if err != nil {
+			c.AbortWithError(http.StatusInternalServerError, err)
+		}
+		c.Redirect(http.StatusTemporaryRedirect, acceptBody.RedirectTo)
+	})
+
 	r.GET("/oidc-adapter/auth/:provider/callback", obtainProvider, func(c *gin.Context) {
 		user, err := gothic.CompleteUserAuth(c.Writer, c.Request)
 		if err != nil {
