@@ -38,6 +38,13 @@ func acceptLoginChallenge(c *gin.Context, challenge, subject string) {
 	c.Redirect(http.StatusTemporaryRedirect, acceptBody.RedirectTo)
 }
 
+// Workaround for goth to obtain providerName from gin's Params
+func obtainProvider(c *gin.Context) {
+	query := c.Request.URL.Query()
+	query.Add("provider", c.Param("provider"))
+	c.Request.URL.RawQuery = query.Encode()
+}
+
 func main() {
 	goth.UseProviders(
 		gothlark.New(
@@ -78,7 +85,7 @@ func main() {
 		c.Redirect(http.StatusTemporaryRedirect, redirectTo.String())
 	})
 
-	r.GET("/oidc-adapter/auth/{provider}/callback", func(c *gin.Context) {
+	r.GET("/oidc-adapter/auth/:provider/callback", obtainProvider, func(c *gin.Context) {
 		user, err := gothic.CompleteUserAuth(c.Writer, c.Request)
 		if err != nil {
 			c.AbortWithError(http.StatusInternalServerError, err)
@@ -88,7 +95,7 @@ func main() {
 		acceptLoginChallenge(c, c.Query("state"), user.UserID)
 	})
 
-	r.GET("/oidc-adapter/auth/{provider}", func(c *gin.Context) {
+	r.GET("/oidc-adapter/auth/:provider", obtainProvider, func(c *gin.Context) {
 		gothic.BeginAuthHandler(c.Writer, c.Request)
 	})
 
