@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"github.com/gin-gonic/gin"
+	"github.com/mitchellh/mapstructure"
 	hydra "github.com/ory/hydra-client-go"
 	kratos "github.com/ory/kratos-client-go"
 	"net/http"
@@ -14,6 +15,12 @@ var (
 	hydraClient  = NewHydraClient()
 	kratosClient = NewKratosClient()
 )
+
+type Traits struct {
+	NetID string `mapstructure:"netid"`
+	Name  string `mapstructure:"name"`
+	Email string `mapstructure:"email"`
+}
 
 func NewHydraClient() *hydra.APIClient {
 	conf := hydra.NewConfiguration()
@@ -121,13 +128,33 @@ func main() {
 			return
 		}
 
+		sess, _, err := kratosClient.V0alpha2Api.ToSession(c).Cookie(c.GetHeader("cookie")).Execute()
+		if err != nil {
+			c.AbortWithError(http.StatusInternalServerError, err)
+			return
+		}
+
+		var traits Traits
+		err = mapstructure.Decode(sess.Identity.Traits, &traits)
+		if err != nil {
+			c.AbortWithError(http.StatusInternalServerError, errors.New("traits not deserializable"))
+			return
+		}
+
+		idTokenData := make(map[string]interface{}, 0)
+		idTokenData["netid"] = traits.NetID
+		idTokenData["name"] = traits.Name
+		idTokenData["email"] = traits.Email
+
 		remember := false
 		acceptReq := hydra.AcceptConsentRequest{
 			GrantAccessTokenAudience: reqBody.RequestedAccessTokenAudience,
 			GrantScope:               reqBody.RequestedScope,
 			Remember:                 &remember,
 			RememberFor:              nil,
-			Session:                  nil,
+			Session: &hydra.ConsentRequestSession{
+				IdToken: idTokenData,
+			},
 		}
 		acceptBody, _, err := hydraClient.AdminApi.AcceptConsentRequest(c).
 			ConsentChallenge(challenge).
