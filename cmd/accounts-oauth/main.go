@@ -98,11 +98,12 @@ func main() {
 			return
 		}
 
-		traits, ok := sess.Identity.Traits.(map[string]string)
+		pTraits, ok := sess.Identity.Traits.(*map[string]string)
 		if !ok {
 			c.AbortWithError(http.StatusInternalServerError, errors.New("traits not deserializable"))
 			return
 		}
+		traits := *pTraits
 		acceptLoginChallenge(c, c.Query("login_challenge"), traits["netid"])
 	})
 
