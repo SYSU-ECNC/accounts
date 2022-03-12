@@ -98,13 +98,18 @@ func main() {
 			return
 		}
 
-		pTraits, ok := sess.Identity.Traits.(*map[string]string)
+		traits, ok := sess.Identity.Traits.(map[string]interface{})
 		if !ok {
 			c.AbortWithError(http.StatusInternalServerError, errors.New("traits not deserializable"))
 			return
 		}
-		traits := *pTraits
-		acceptLoginChallenge(c, c.Query("login_challenge"), traits["netid"])
+		netID, ok := traits["netid"].(string)
+		if !ok {
+			c.AbortWithError(http.StatusInternalServerError, errors.New("traits field not deserializable"))
+			return
+		}
+
+		acceptLoginChallenge(c, c.Query("login_challenge"), netID)
 	})
 
 	r.GET("/kratos-hydra/consent", func(c *gin.Context) {
