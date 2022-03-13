@@ -144,6 +144,7 @@ func main() {
 		idTokenData := make(map[string]interface{}, 0)
 		idTokenData["netid"] = traits.NetID
 		idTokenData["name"] = traits.Name
+		idTokenData["given_name"] = traits.Name
 		idTokenData["email"] = traits.Email
 
 		remember := false

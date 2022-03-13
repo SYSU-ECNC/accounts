@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"github.com/SYSU-ECNC/oidc-adapter/internal/pkg/gothlark"
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/sessions"
 	"github.com/markbates/goth"
 	"github.com/markbates/goth/gothic"
 	hydra "github.com/ory/hydra-client-go"
@@ -46,6 +48,9 @@ func obtainProvider(c *gin.Context) {
 }
 
 func main() {
+	cookieStore := sessions.NewCookieStore([]byte(os.Getenv("SESSION_SECRET")))
+	gothic.Store = cookieStore
+
 	goth.UseProviders(
 		gothlark.New(
 			os.Getenv("LARK_APP_ID"),
@@ -94,6 +99,14 @@ func main() {
 			return
 		}
 
+		sess, _ := cookieStore.Get(c.Request, "oidc-adapter-store")
+		idTokenData := make(map[string]interface{}, 0)
+		idTokenData["name"] = sess.Values["name"]
+		idTokenData["email"] = sess.Values["email"]
+		sess.Values["name"] = ""
+		sess.Values["email"] = ""
+		sess.Save(c.Request, c.Writer)
+
 		remember := true
 		rememberFor := int64(600)
 		acceptReq := hydra.AcceptConsentRequest{
@@ -101,7 +114,7 @@ func main() {
 			GrantScope:               reqBody.RequestedScope,
 			Remember:                 &remember,
 			RememberFor:              &rememberFor,
-			Session:                  nil,
+			Session:                  &hydra.ConsentRequestSession{IdToken: idTokenData},
 		}
 		acceptBody, _, err := hydraClient.AdminApi.AcceptConsentRequest(c).
 			ConsentChallenge(challenge).
@@ -119,6 +132,12 @@ func main() {
 			c.AbortWithError(http.StatusInternalServerError, err)
 			return
 		}
+
+		sess, _ := cookieStore.Get(c.Request, "oidc-adapter-store")
+		sess.Values["name"] = user.Name
+		sess.Values["email"] = fmt.Sprintf("%s@ecnc.link", user.UserID)
+		sess.Values["picture"] = user.AvatarURL
+		sess.Save(c.Request, c.Writer)
 
 		acceptLoginChallenge(c, c.Query("state"), user.UserID)
 	})
